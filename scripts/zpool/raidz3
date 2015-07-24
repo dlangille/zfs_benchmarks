@@ -1,0 +1,40 @@
+#!/bin/sh
+
+# set your disks here
+DISKS="da8 da9 da10 da11 da12 da13 da14 da15"
+
+NUM=-1
+for I in ${DISKS}; do
+  NUM=$(($NUM + 1))
+  gpart destroy -F ${I}
+  gpart create -s gpt ${I}
+
+  # get the serial number for the label
+  serial=`/usr/local/sbin/smartctl -a /dev/${I} | grep 'Serial Number' | cut -f 3 -w`
+  echo ${i} has serial \'${serial}\'
+
+  #
+  # note: not using all the disk, on purpose, adjust this size for your HDD
+  #
+  gpart add      -s 5860533095 -t freebsd-zfs  -l disk_${serial} ${I}
+
+  gnop create -S 4096 /dev/gpt/disk_${serial}
+done
+
+# create our main pool, based on those nop... which gets us well aligned.
+zpool create -f -O atime=off          \
+                -O checksum=fletcher4 \
+                benchmarking raidz3 /dev/gpt/disk_*.nop
+
+#exit
+
+#zpool export benchmarking
+
+# now, drop those nops....
+NUM=-1
+for I in ${DISKS}; do
+  NUM=$(($NUM + 1))
+  serial=`smartctl -a /dev/${I} | grep 'Serial Number' | cut -f 3 -w`
+  gnop destroy /dev/gpt/disk_${serial}.nop
+done
+
